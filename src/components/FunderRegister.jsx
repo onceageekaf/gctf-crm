@@ -1,106 +1,232 @@
-//src/components/FunderRegister.jsx
+import React, { useEffect, useState } from 'react'
+import { Bar, Doughnut, Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from 'chart.js'
+import { FUND_ROWS, STAGE_LABEL, STAGE_CLASS, TIER_CLASS } from '../data/crmData.js'
 
-import React, { useState } from 'react'
-import { DONORS, TIER_COLORS, STAGE_COLORS, FUNDING_STAGES } from '../data/fundingData.js'
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend)
 
-export default function FunderRegister() {
-  const [tierFilter, setTierFilter]   = useState('all')
-  const [stageFilter, setStageFilter] = useState('all')
-  const [search, setSearch]           = useState('')
+const CHART = { fg: '#111827', muted: '#6b7280', border: '#e5e7eb' }
 
-  const tiers  = ['all', 'anchor', 'forecast', 'illustrative']
-  const stages = ['all', ...FUNDING_STAGES]
+const SUMMARY_STATS = [
+  { label: 'Total Pipeline', value: '$1.54B', sub: '57 active opportunities', color: '#082E4A' },
+  { label: 'Disbursed to Date', value: '$214M', sub: '17 active tranches', color: '#065056' },
+  { label: 'Agreements Signed', value: '$87M', sub: '6 instruments', color: '#082E4A' },
+  { label: 'Under Review', value: '$204M', sub: '5 in review', color: '#d97706' },
+  { label: 'New Identified', value: '$540M', sub: '14 opportunities', color: '#1e40af' },
+  { label: 'Closed / Reported', value: '$42M', sub: '3 grants closed', color: '#8A9294' },
+]
 
-  const filtered = DONORS.filter(d => {
-    if (tierFilter  !== 'all' && d.tier  !== tierFilter)  return false
-    if (stageFilter !== 'all' && d.stage !== stageFilter) return false
-    if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+const FILTER_OPTIONS = [
+  { id: 'all', label: 'All (57)' },
+  { id: 'identified', label: 'Identified (14)' },
+  { id: 'eoi', label: 'EOI / Submitted (16)' },
+  { id: 'review', label: 'Under Review (5)' },
+  { id: 'awarded', label: 'Awarded (8)' },
+  { id: 'disbursed', label: 'Disbursed (17)' },
+  { id: 'reporting', label: 'Closed (3)' },
+]
 
-  const totalFiltered = filtered.reduce((s, d) => s + d.pledge_m, 0)
-  const YEARS = [2026, 2027, 2028, 2029, 2030]
+const FILTER_MAP = {
+  all: null,
+  identified: ['identified'],
+  eoi: ['eoi', 'submitted'],
+  review: ['review'],
+  awarded: ['awarded', 'agreement'],
+  disbursed: ['signed', 'disbursed'],
+  reporting: ['reporting'],
+}
+
+const FILTER_ALIASES = {
+  signed: 'disbursed',
+  agreement: 'awarded',
+  submitted: 'eoi',
+}
+
+function normalizeFilter(filter) {
+  return FILTER_ALIASES[filter] || filter
+}
+
+function filterRows(filter) {
+  const allowed = FILTER_MAP[filter]
+  return FUND_ROWS.filter(row => !allowed || allowed.includes(row.stage))
+}
+
+const stageChartData = {
+  labels: ['Identified', 'EOI', 'Submitted', 'Review', 'Awarded', 'Agreement', 'Signed', 'Disbursed', 'Closed'],
+  datasets: [{
+    label: '$M',
+    data: [540, 203, 200, 204, 151, 108, 87, 214, 42],
+    backgroundColor: ['#B2CBD8', '#80ADAD', '#065056', '#2A3B42', '#082E4A', '#3A4042', '#065056', '#082E4A', '#8A9294'],
+    borderRadius: 4,
+  }],
+}
+
+const stageChartOptions = {
+  indexAxis: 'y',
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { color: CHART.border }, ticks: { color: CHART.muted, callback: v => `$${v}M` } },
+    y: { grid: { display: false }, ticks: { color: CHART.muted, font: { size: 10 } } },
+  },
+}
+
+const typeChartData = {
+  labels: ['IFI Concessional', 'Bilateral Grant', 'DFI/Blended', 'Philanthropic', 'Outcome Bond', 'USF/Regional', 'Corporate/Tech'],
+  datasets: [{
+    data: [420, 290, 180, 150, 150, 65, 55],
+    backgroundColor: ['#082E4A', '#065056', '#2A3B42', '#80ADAD', '#B2CBD8', '#8A9294', '#3A4042'],
+    borderColor: ['#082E4A', '#065056', '#2A3B42', '#80ADAD', '#B2CBD8', '#8A9294', '#3A4042'],
+    borderWidth: 1,
+  }],
+}
+
+const typeChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: '55%',
+  plugins: {
+    legend: { position: 'bottom', labels: { boxWidth: 8, padding: 6, font: { size: 9 }, color: CHART.fg } },
+  },
+}
+
+const trendChartData = {
+  labels: ['J26', 'F26', 'M26', 'A26', 'M26', 'J26', 'J26', 'A26', 'S26', 'O26', 'N26', 'D26', 'J27', 'F27', 'M27', 'A27', 'M27', 'J27'],
+  datasets: [{
+    label: 'Monthly Disbursements ($M)',
+    data: [4, 5, 6, 7, 8, 7, 9, 10, 12, 11, 13, 15, 22, 28, 35, 42, 50, 55],
+    borderColor: '#082E4A',
+    backgroundColor: '#082E4A22',
+    fill: true,
+    borderWidth: 2,
+    pointRadius: 2,
+    tension: 0.4,
+  }],
+}
+
+const trendChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: CHART.muted, font: { size: 9 }, maxRotation: 45 } },
+    y: { grid: { color: CHART.border }, ticks: { color: CHART.muted, callback: v => `$${v}M` } },
+  },
+}
+
+export default function FunderRegister({ initialFilter = 'all' }) {
+  const [fundFilter, setFundFilter] = useState(() => normalizeFilter(initialFilter))
+
+  useEffect(() => {
+    setFundFilter(normalizeFilter(initialFilter))
+  }, [initialFilter])
+
+  const rows = filterRows(fundFilter)
 
   return (
-    <div className="space-y-5">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <input
-          type="text" placeholder="Search donors…" value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="border border-aris-aluminium rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-aris-teal w-56"
-        />
-        <div className="flex gap-1">
-          {tiers.map(t => (
-            <button key={t} onClick={() => setTierFilter(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${
-                tierFilter === t ? 'bg-aris-cobalt text-white' : 'bg-white border border-aris-aluminium text-aris-nickel hover:border-aris-teal'
-              }`}>{t}
-            </button>
-          ))}
-        </div>
-        <select value={stageFilter} onChange={e => setStageFilter(e.target.value)}
-          className="border border-aris-aluminium rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-aris-teal">
-          {stages.map(s => <option key={s} value={s}>{s === 'all' ? 'All Stages' : s}</option>)}
-        </select>
-        <span className="ml-auto text-sm font-medium text-aris-graphite">{filtered.length} donors · ${totalFiltered.toFixed(1)}M</span>
+    <div>
+      <div className="illustrative-banner">
+        ⚠️ All figures are illustrative and forward-looking — pre-feasibility planning only.
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-aris-aluminium overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-aris-white border-b border-aris-aluminium">
-              <tr>
-                {['Donor','Type','Tier','Pledge ($M)',...YEARS.map(String),'Total','Stage','Notes'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-aris-nickel whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-aris-aluminium">
-              {filtered.map(d => {
-                const tc  = TIER_COLORS[d.tier]
-                const sc  = STAGE_COLORS[d.stage] || 'bg-gray-100 text-gray-700'
-                const tot = d.tranches.reduce((s,v)=>s+v,0)
-                return (
-                  <tr key={d.id} className="hover:bg-aris-white transition-colors">
-                    <td className="px-3 py-3 font-medium text-aris-graphite whitespace-nowrap">{d.name}</td>
-                    <td className="px-3 py-3 text-xs text-aris-nickel whitespace-nowrap">{d.type}</td>
-                    <td className="px-3 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${tc.bg} ${tc.text}`}>{d.tier}</span></td>
-                    <td className="px-3 py-3 font-medium">${d.pledge_m}M</td>
-                    {d.tranches.map((t,i) => (
-                      <td key={i} className="px-3 py-3 text-center text-xs">
-                        {t > 0 ? <span className="font-medium">${t}M</span> : <span className="text-aris-aluminium">—</span>}
-                      </td>
-                    ))}
-                    <td className="px-3 py-3 font-medium text-aris-teal">${tot}M</td>
-                    <td className="px-3 py-3 whitespace-nowrap"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc}`}>{d.stage}</span></td>
-                    <td className="px-3 py-3 text-xs text-aris-nickel max-w-xs">{d.notes || '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot className="bg-aris-white border-t border-aris-aluminium">
-              <tr>
-                <td colSpan={3} className="px-3 py-3 font-semibold text-aris-graphite">TOTAL ({filtered.length} donors)</td>
-                <td className="px-3 py-3 font-semibold">${totalFiltered.toFixed(1)}M</td>
-                {[0,1,2,3,4].map(i => (
-                  <td key={i} className="px-3 py-3 font-semibold text-center text-xs">
-                    ${filtered.reduce((s,d)=>s+(d.tranches[i]||0),0).toFixed(1)}M
-                  </td>
-                ))}
-                <td className="px-3 py-3 font-semibold text-aris-teal">${totalFiltered.toFixed(1)}M</td>
-                <td colSpan={2} />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+      <div className="summary-strip">
+        {SUMMARY_STATS.map(stat => (
+          <div key={stat.label} className="stat-card">
+            <div className="stat-label">{stat.label}</div>
+            <div className="stat-value" style={{ color: stat.color }}>{stat.value}</div>
+            <div className="stat-sub">{stat.sub}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="flex gap-4 text-xs text-aris-nickel">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-600 inline-block"></span> Anchor — grounded in public signals</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span> Forecast — base-case assumption</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-500 inline-block"></span> Illustrative — included to reach Y5 target range</span>
+      <div className="filter-bar">
+        <span className="filter-label">Stage:</span>
+        {FILTER_OPTIONS.map(option => (
+          <button
+            key={option.id}
+            type="button"
+            className={`filter-btn ${fundFilter === option.id ? 'active' : ''}`}
+            onClick={() => setFundFilter(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="panel panel-flat">
+        <p className="sr-only">
+          Funding pipeline table listing grants and instruments by donor, type, amount, stage, and status.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Donor / Instrument</th>
+              <th>Type</th>
+              <th>Tier</th>
+              <th style={{ textAlign: 'right' }}>Amount</th>
+              <th>Stage</th>
+              <th>Countries</th>
+              <th>Next Milestone</th>
+              <th>Due</th>
+              <th>Flag</th>
+              <th>Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.id}>
+                <td className="text-[10px] text-[#6b7280]">{row.id}</td>
+                <td className="font-semibold max-w-[180px] text-[11px]">{row.donor}</td>
+                <td className="text-[11px] text-[#6b7280]">{row.type}</td>
+                <td>
+                  <span className={`pill ${TIER_CLASS[row.tier]}`}>
+                    {row.tier.charAt(0).toUpperCase() + row.tier.slice(1)}
+                  </span>
+                </td>
+                <td className="font-bold text-right">${row.amount}M</td>
+                <td><span className={`pill ${STAGE_CLASS[row.stage]}`}>{STAGE_LABEL[row.stage]}</span></td>
+                <td className="text-[11px] text-[#6b7280]">{row.countries}</td>
+                <td className="text-[11px]">{row.milestone}</td>
+                <td className="text-[11px] text-[#6b7280]">{row.due}</td>
+                <td className="text-center">{row.flag}</td>
+                <td className="text-[11px] text-[#6b7280]">{row.owner}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="fund-charts-grid">
+        <div className="panel">
+          <div className="panel-title">Pipeline Value by Stage ($M)</div>
+          <div className="relative h-[200px]">
+            <Bar data={stageChartData} options={stageChartOptions} />
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-title">Grants by Donor Type</div>
+          <div className="relative h-[200px]">
+            <Doughnut data={typeChartData} options={typeChartOptions} />
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-title">Monthly Disbursement Trend ($M)</div>
+          <div className="relative h-[200px]">
+            <Line data={trendChartData} options={trendChartOptions} />
+          </div>
+        </div>
       </div>
     </div>
   )

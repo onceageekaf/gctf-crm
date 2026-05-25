@@ -1,155 +1,252 @@
-//src/components/CommandCentre.jsx
-
 import React from 'react'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement,
-  Tooltip, Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Tooltip,
+  Legend,
 } from 'chart.js'
-import { DONORS } from '../data/fundingData.js'
-import { COUNTRIES, STATUS_COLORS } from '../data/countryData.js'
+import { COUNTRIES } from '../data/crmData.js'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend)
 
-const ARIS = {
-  cobalt: '#082E4A', teal: '#065056', graphite: '#2A3B42',
-  sky: '#B2CBD8', mint: '#80ADAD',
+const CHART = {
+  fg: '#111827',
+  muted: '#6b7280',
+  border: '#e5e7eb',
 }
 
-const YEARS = ['2026', '2027', '2028', '2029', '2030']
+const KPIS = [
+  { label: 'Total Fund Mobilised', value: '$487M', sub: 'of $631M target', delta: '▲ 77% of envelope', deltaClass: 'up' },
+  { label: 'Schools Connected', value: '62,340', sub: 'of 134,669 target', delta: '▲ 46% on track', deltaClass: 'up' },
+  { label: 'Capital Deployed', value: '$214M', sub: 'across 12 countries', delta: '⚠ 34% utilisation', deltaClass: 'warn' },
+  { label: 'Avg. Cost / School', value: '$3,435', sub: 'BCG benchmark: $5,575', delta: '✓ 38% below BCG', deltaClass: 'ok' },
+  { label: 'Open Issues', value: '7', sub: '2 critical · 3 amber · 2 info', delta: '⚠ Review required', deltaClass: 'warn' },
+]
 
-export default function CommandCentre({ onCountryDrill }) {
-  const totalFund = 631
-  const mobilised = 487
-  const deployed = 214
-  const schoolsConnected = 62340
-  const schoolsTarget = 134669
-  const avgCostPerSchool = 3435
-  const bcgBenchmark = 5575
-  const openIssues = 7
+const FUNNEL_STAGES = [
+  { stage: 'Grant Identified', width: 100, bg: '#B2CBD8', amount: 540, count: 14, filter: 'identified' },
+  { stage: 'Expression of Interest', width: 72, bg: '#80ADAD', amount: 389, count: 9, filter: 'eoi' },
+  { stage: 'Proposal Submitted', width: 55, bg: '#065056', amount: 298, count: 7, filter: 'submitted' },
+  { stage: 'Under Review', width: 38, bg: '#2A3B42', amount: 204, count: 5, filter: 'review' },
+  { stage: 'Grant Awarded', width: 28, bg: '#3A4042', amount: 151, count: 8, filter: 'awarded' },
+  { stage: 'Agreement in Progress', width: 20, bg: '#2A3B42', amount: 108, count: 4, filter: 'agreement' },
+  { stage: 'Agreement Signed', width: 16, bg: '#065056', amount: 87, count: 6, filter: 'signed' },
+  { stage: 'Disbursed / Active', width: 22, bg: '#082E4A', amount: 214, count: 17, filter: 'disbursed' },
+  { stage: 'Reporting / Closed', width: 8, bg: '#8A9294', amount: 42, count: 3, filter: 'reporting' },
+]
 
-  const stageTotals = {
-    'Disbursed / Reporting':       DONORS.filter(d => ['Funds Disbursed','Reporting'].includes(d.stage)).reduce((s,d)=>s+d.pledge_m,0),
-    'Agreement Signed':            DONORS.filter(d => d.stage === 'Grant Agreement Signed').reduce((s,d)=>s+d.pledge_m,0),
-    'Agreement in Progress':       DONORS.filter(d => d.stage === 'Grant Agreement in Progress').reduce((s,d)=>s+d.pledge_m,0),
-    'Under Review / Applied':      DONORS.filter(d => ['Grant Under Review','Grant Applied'].includes(d.stage)).reduce((s,d)=>s+d.pledge_m,0),
-    'Identified':                  DONORS.filter(d => d.stage === 'Grant Identified').reduce((s,d)=>s+d.pledge_m,0),
-  }
+const LIVE_ISSUES = [
+  { icon: '🔴', title: 'Nigeria — ISP contract dispute', sub: 'Spectralink NG contesting exclusivity. Risk to $11.8M tranche. Due: 30 Jun 2027' },
+  { icon: '🔴', title: 'BII Mezzanine — IC decision pending', sub: '$104M pending IC sign-off. Blocks 4 countries. Expected Q3 2027' },
+  { icon: '🟡', title: 'Tanzania — customs delay', sub: '330 VSAT units at Dar port. Affects 800 schools.' },
+  { icon: '🟡', title: 'UNICEF Outcome Bonds renegotiation', sub: '$150M term sheet revision. New terms Q4 2027.' },
+  { icon: '🟡', title: 'Ethiopia — MOU renewal overdue', sub: 'Deployment on hold pending Ministry signature.' },
+  { icon: '🔵', title: 'Giga Maps refresh — 9 countries', sub: 'School data not validated since Jan 2027. ETA Aug 2027.' },
+  { icon: '🔵', title: 'Kenya USF cross-border clause', sub: '$50M pending MoF legal clearance. No impact to ops.' },
+]
 
-  const funnelData = {
-    labels: Object.keys(stageTotals),
-    datasets: [{ data: Object.values(stageTotals), backgroundColor: [ARIS.teal, ARIS.cobalt, ARIS.graphite, ARIS.mint, ARIS.sky], borderRadius: 4 }]
-  }
+function progressColor(country) {
+  if (country.statusClass === 'pill-navy') return '#065056'
+  if (country.statusClass === 'pill-green') return '#082E4A'
+  return '#80ADAD'
+}
 
-  const anchorForecast = DONORS.filter(d => d.tier !== 'illustrative')
-  const illustrative   = DONORS.filter(d => d.tier === 'illustrative')
+const chartFont = { family: "'Host Grotesk', system-ui, sans-serif", size: 11 }
 
-  const inflowData = {
-    labels: YEARS,
-    datasets: [
-      { label: 'Anchor + Forecast ($M)', data: YEARS.map((_,i) => anchorForecast.reduce((s,d)=>s+(d.tranches[i]||0),0)), backgroundColor: ARIS.teal, borderRadius: 4 },
-      { label: 'Illustrative ($M)',       data: YEARS.map((_,i) => illustrative.reduce((s,d)=>s+(d.tranches[i]||0),0)),   backgroundColor: ARIS.sky,  borderRadius: 4 },
-    ]
-  }
+const waterfallData = {
+  labels: ['2026', '2027', '2028', '2029', '2030'],
+  datasets: [
+    { label: 'Donor Inflows ($M)', data: [55, 96, 142, 168, 127], backgroundColor: '#082E4A', borderRadius: 4 },
+    { label: 'Country Drawdowns ($M)', data: [27, 187, 218, 195, 138], backgroundColor: '#80ADAD', borderRadius: 4 },
+    {
+      label: 'Net Balance ($M)',
+      data: [28, 165, 314, 336, 325],
+      type: 'line',
+      borderColor: '#FDE737',
+      backgroundColor: 'transparent',
+      pointBackgroundColor: '#FDE737',
+      borderWidth: 2,
+      pointRadius: 4,
+      tension: 0.3,
+    },
+  ],
+}
 
-  const kpis = [
-    { label: 'Total Fund Envelope', value: `$${totalFund}M`,               sub: 'GCTF target',                               color: 'bg-aris-cobalt text-white' },
-    { label: 'Mobilised (2027)',     value: `$${mobilised}M`,               sub: `${Math.round(mobilised/totalFund*100)}% of envelope`, color: 'bg-aris-teal text-white' },
-    { label: 'Capital Deployed',     value: `$${deployed}M`,                sub: `${Math.round(deployed/mobilised*100)}% utilisation`, color: 'bg-aris-graphite text-white' },
-    { label: 'Schools Connected',    value: schoolsConnected.toLocaleString(), sub: `of ${schoolsTarget.toLocaleString()} target`, color: 'bg-white border border-aris-aluminium' },
-    { label: 'Avg Cost / School',    value: `$${avgCostPerSchool.toLocaleString()}`, sub: `BCG benchmark $${bcgBenchmark.toLocaleString()}`, color: avgCostPerSchool <= bcgBenchmark ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200' },
-    { label: 'Open Issues',          value: openIssues,                     sub: '2 critical · 3 amber · 2 info',             color: 'bg-amber-50 border border-amber-200' },
-  ]
+const waterfallOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'top', labels: { boxWidth: 10, padding: 10, font: chartFont, color: CHART.fg } },
+  },
+  scales: {
+    x: { grid: { color: CHART.border }, ticks: { color: CHART.muted } },
+    y: { grid: { color: CHART.border }, ticks: { color: CHART.muted, callback: v => `$${v}M` } },
+  },
+}
 
+const donutData = {
+  labels: ['Anchor ($192M)', 'Forecast ($152M)', 'Illustrative ($143M)', 'Not Yet ($144M)'],
+  datasets: [{
+    data: [192, 152, 143, 144],
+    backgroundColor: ['#082E4A', '#065056', '#80ADAD', '#E8EAEB'],
+    borderColor: ['#082E4A', '#065056', '#80ADAD', '#E8EAEB'],
+    borderWidth: 1,
+  }],
+}
+
+const donutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: '65%',
+  plugins: {
+    legend: { position: 'right', labels: { boxWidth: 9, padding: 8, font: { ...chartFont, size: 10 }, color: CHART.fg } },
+  },
+}
+
+const quarterlyData = {
+  labels: ['Q1 26', 'Q2 26', 'Q3 26', 'Q4 26', 'Q1 27', 'Q2 27'],
+  datasets: [
+    { label: 'Inflows', data: [8, 14, 18, 15, 24, 28], backgroundColor: '#082E4A', borderRadius: 3 },
+    { label: 'Drawdowns', data: [4, 7, 8, 8, 42, 55], backgroundColor: '#80ADAD', borderRadius: 3 },
+  ],
+}
+
+const quarterlyOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'top', labels: { boxWidth: 8, padding: 8, font: { ...chartFont, size: 10 }, color: CHART.fg } },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: CHART.muted, font: { size: 10 } } },
+    y: { grid: { color: CHART.border }, ticks: { color: CHART.muted, font: { size: 10 }, callback: v => `$${v}M` } },
+  },
+}
+
+export default function CommandCentre({ onCountryDrill, onFundFilter }) {
   return (
-    <div className="space-y-6">
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {kpis.map(k => (
-          <div key={k.label} className={`rounded-xl p-4 ${k.color}`}>
-            <p className="text-xs font-medium opacity-70 mb-1">{k.label}</p>
-            <p className="text-2xl font-semibold">{k.value}</p>
-            <p className="text-xs opacity-60 mt-1">{k.sub}</p>
+    <div>
+      <div className="illustrative-banner">
+        ⚠️ All figures are illustrative and forward-looking — produced for pre-feasibility planning purposes only. Not a statement of actual commitments.
+      </div>
+
+      <div className="kpi-grid">
+        {KPIS.map(kpi => (
+          <div key={kpi.label} className="kpi-card">
+            <div className="kpi-label">{kpi.label}</div>
+            <div className="kpi-value">{kpi.value}</div>
+            <div className="kpi-sub">{kpi.sub}</div>
+            <div className={`kpi-delta ${kpi.deltaClass}`}>{kpi.delta}</div>
           </div>
         ))}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-aris-aluminium p-5">
-          <h2 className="text-sm font-semibold text-aris-graphite mb-4">Annual Donor Inflows ($M) — 2026–2030</h2>
-          <div style={{ height: 260 }}>
-            <Bar data={inflowData} options={{
-              responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
-              scales: {
-                x: { stacked: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' } },
-                y: { stacked: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' }, title: { display: true, text: '$M', color: '#6b7280' } }
-              }
-            }} />
+      <div className="section-row two-col">
+        <div className="panel">
+          <div className="panel-title">
+            📊 Funding Pipeline by Stage{' '}
+            <span className="text-[10px] font-normal text-[#6b7280]">— click a bar to open Funder Register</span>
           </div>
+          {FUNNEL_STAGES.map(row => (
+            <div key={row.stage} className="funnel-row">
+              <div className="funnel-stage">{row.stage}</div>
+              <div className="funnel-bar-wrap">
+                <button
+                  type="button"
+                  className="funnel-bar"
+                  style={{ width: `${row.width}%`, background: row.bg }}
+                  onClick={() => onFundFilter?.(row.filter)}
+                >
+                  <span>${row.amount}M · {row.count}</span>
+                </button>
+              </div>
+              <div className="funnel-count">{row.count}</div>
+            </div>
+          ))}
         </div>
 
-        <div className="bg-white rounded-xl border border-aris-aluminium p-5">
-          <h2 className="text-sm font-semibold text-aris-graphite mb-4">Pipeline by Stage ($M)</h2>
-          <div style={{ height: 260 }}>
-            <Bar data={funnelData} options={{
-              indexAxis: 'y',
-              responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' } },
-                y: { grid: { display: false }, ticks: { color: '#374151', font: { size: 11 } } }
-              }
-            }} />
+        <div className="panel">
+          <div className="panel-title">💧 Annual Fund Balance (2026–2030)</div>
+          <p className="sr-only">
+            Bar chart showing annual fund inflows and drawdowns 2026–2030, net balance rising from $28M to $335M.
+          </p>
+          <div className="relative h-[280px]">
+            <Bar data={waterfallData} options={waterfallOptions} />
           </div>
         </div>
       </div>
 
-      {/* Country Table */}
-      <div className="bg-white rounded-xl border border-aris-aluminium overflow-hidden">
-        <div className="px-5 py-4 border-b border-aris-aluminium flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-aris-graphite">Country Allocation Overview</h2>
-          <span className="text-xs text-aris-nickel">Click row to drill down →</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-aris-white">
+      <div className="section-row three-col">
+        <div className="panel">
+          <div className="panel-title">
+            🗺️ Country Programme Status{' '}
+            <span className="text-[10px] font-normal text-[#6b7280]">— click row to drill down</span>
+          </div>
+          <table>
+            <thead>
               <tr>
-                {['Rank','Country','Status','Drawdown','Schools Target','Connected','Progress','Technology'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-aris-nickel">{h}</th>
-                ))}
+                <th>Country</th>
+                <th>Schools</th>
+                <th>Deployed</th>
+                <th>Progress</th>
+                <th>Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-aris-aluminium">
-              {COUNTRIES.map(c => {
-                const pct = Math.round(c.schools_connected / c.schools_target * 100)
+            <tbody>
+              {COUNTRIES.map(country => {
+                const pct = Math.round((country.schools_connected / country.schools_target) * 100)
                 return (
-                  <tr key={c.code} className="hover:bg-aris-white cursor-pointer transition-colors" onClick={() => onCountryDrill(c)}>
-                    <td className="px-4 py-3 font-medium text-aris-nickel">#{c.rank}</td>
-                    <td className="px-4 py-3 font-medium">{c.flag} {c.name}</td>
-                    <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[c.status]}`}>{c.status}</span></td>
-                    <td className="px-4 py-3 font-medium">${c.drawdown_m}M</td>
-                    <td className="px-4 py-3">{c.schools_target.toLocaleString()}</td>
-                    <td className="px-4 py-3">{c.schools_connected.toLocaleString()}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-aris-aluminium rounded-full h-1.5">
-                          <div className="bg-aris-teal h-1.5 rounded-full" style={{ width: `${Math.min(pct,100)}%` }} />
-                        </div>
-                        <span className="text-xs text-aris-nickel w-8">{pct}%</span>
+                  <tr
+                    key={country.id}
+                    className="clickable-row"
+                    onClick={() => onCountryDrill(country.id)}
+                  >
+                    <td><strong>{country.flag} {country.name}</strong></td>
+                    <td>{country.schools_connected.toLocaleString()} / {country.schools_target.toLocaleString()}</td>
+                    <td>${country.deployed_m}M</td>
+                    <td>
+                      <div className="prog-wrap">
+                        <div className="prog-fill" style={{ width: `${Math.min(pct, 100)}%`, background: progressColor(country) }} />
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-aris-nickel">{c.technology_mix}</td>
+                    <td><span className={`pill ${country.statusClass}`}>{country.status}</span></td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
+
+        <div className="panel">
+          <div className="panel-title">🏦 Mobilised Capital by Donor Tier</div>
+          <p className="sr-only">Doughnut: Anchor $192M, Forecast $152M, Illustrative $143M, Not Yet $144M.</p>
+          <div className="relative h-[190px] mb-3">
+            <Doughnut data={donutData} options={donutOptions} />
+          </div>
+          <div className="panel-title mt-2.5">📅 Quarterly Drawdown vs Inflows</div>
+          <div className="relative h-[140px]">
+            <Bar data={quarterlyData} options={quarterlyOptions} />
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-title">🚨 Live Issues & Flags</div>
+          {LIVE_ISSUES.map(issue => (
+            <div key={issue.title} className="issue-item">
+              <div className="issue-icon">{issue.icon}</div>
+              <div>
+                <div className="issue-title">{issue.title}</div>
+                <div className="issue-sub">{issue.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
-

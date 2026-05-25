@@ -1,88 +1,217 @@
-//src/components/Countries.jsx and src/components/ProjectDetail.jsx
+import React from 'react'
+import { Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js'
+import { COUNTRIES, getProjectStatusClass } from '../data/crmData.js'
 
-import React, { useState } from 'react'
-import { COUNTRIES, STATUS_COLORS, RISK_COLORS } from '../data/countryData.js'
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler)
 
-export default function Countries({ onCountryDrill }) {
-  const [selected, setSelected] = useState(null)
+const CHART_COLORS = {
+  schools: '#082E4A',
+  deployed: '#80ADAD',
+  muted: '#6b7280',
+  border: '#e5e7eb',
+}
+
+export default function Countries({ activeCountryId, onCountryChange, onProjectDrill }) {
+  const country = COUNTRIES.find(c => c.id === activeCountryId) || COUNTRIES[0]
+  const pct = Math.round((country.schools_connected / country.schools_target) * 100)
+  const dpct = Math.round((country.deployed_m / country.drawdown_m) * 100)
+
+  const lineData = {
+    labels: country.chart_labels,
+    datasets: [
+      {
+        label: 'Schools Connected',
+        data: country.chart_schools,
+        borderColor: CHART_COLORS.schools,
+        backgroundColor: `${CHART_COLORS.schools}22`,
+        fill: true,
+        borderWidth: 2,
+        pointRadius: 3,
+        tension: 0.3,
+        yAxisID: 'y1',
+      },
+      {
+        label: 'Deployed ($M)',
+        data: country.chart_deployed,
+        borderColor: CHART_COLORS.deployed,
+        borderDash: [4, 3],
+        borderWidth: 2,
+        pointRadius: 3,
+        tension: 0.3,
+        yAxisID: 'y2',
+        fill: false,
+      },
+    ],
+  }
+
+  const lineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: { boxWidth: 10, padding: 10, font: { size: 10 }, color: '#111827' },
+      },
+    },
+    scales: {
+      x: { grid: { color: CHART_COLORS.border }, ticks: { color: CHART_COLORS.muted } },
+      y1: {
+        position: 'left',
+        grid: { color: CHART_COLORS.border },
+        ticks: { color: CHART_COLORS.muted, callback: v => v.toLocaleString() },
+        title: { display: true, text: 'Schools', color: CHART_COLORS.muted },
+      },
+      y2: {
+        position: 'right',
+        grid: { display: false },
+        ticks: { color: CHART_COLORS.muted, callback: v => `$${v}M` },
+        title: { display: true, text: 'USD Deployed', color: CHART_COLORS.muted },
+      },
+    },
+  }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-      <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {COUNTRIES.map(c => {
-          const pct = Math.round(c.schools_connected / c.schools_target * 100)
-          const isSel = selected?.code === c.code
-          return (
-            <div key={c.code} onClick={() => setSelected(c === selected ? null : c)}
-              className={`bg-white rounded-xl border p-4 cursor-pointer transition-all ${isSel ? 'border-aris-teal shadow-md' : 'border-aris-aluminium hover:border-aris-mint hover:shadow-sm'}`}>
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{c.flag}</span>
-                  <div>
-                    <h3 className="font-semibold text-aris-graphite text-sm">{c.name}</h3>
-                    <span className="text-xs text-aris-nickel">Priority #{c.rank} · {c.income_tier}</span>
-                  </div>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[c.status]}`}>{c.status}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                <div><span className="text-aris-nickel">Drawdown</span><br /><span className="font-semibold">${c.drawdown_m}M</span></div>
-                <div><span className="text-aris-nickel">Technology</span><br /><span className="font-semibold">{c.technology_mix}</span></div>
-                <div><span className="text-aris-nickel">Schools Target</span><br /><span className="font-semibold">{c.schools_target.toLocaleString()}</span></div>
-                <div><span className="text-aris-nickel">Connected</span><br /><span className="font-semibold">{c.schools_connected.toLocaleString()}</span></div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-aris-aluminium rounded-full h-1.5">
-                  <div className="bg-aris-teal h-1.5 rounded-full" style={{ width: `${Math.min(pct,100)}%` }} />
-                </div>
-                <span className="text-xs font-medium text-aris-nickel">{pct}%</span>
-              </div>
-              {c.provisional && <p className="text-xs text-amber-600 mt-2">⚠ Provisional — Giga Maps verification pending</p>}
-            </div>
-          )
-        })}
+    <div>
+      <div className="illustrative-banner">
+        ⚠️ All figures are illustrative and forward-looking — produced for pre-feasibility planning purposes only. Not a statement of actual commitments.
       </div>
 
-      <div className="lg:col-span-1">
-        {selected ? (
-          <div className="bg-white rounded-xl border border-aris-aluminium p-5 sticky top-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-3xl">{selected.flag}</span>
+      <div className="country-tabs">
+        {COUNTRIES.map(c => (
+          <button
+            key={c.id}
+            type="button"
+            className={`ctab ${c.id === activeCountryId ? 'active' : ''}`}
+            onClick={() => onCountryChange(c.id)}
+          >
+            <span className="dot" style={{ background: c.dot }} />
+            {c.flag} {c.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="detail-grid">
+        <div className="left-col">
+          <div className="country-hero">
+            <div className="country-flag">{country.flag}</div>
+            <div className="country-name">{country.name}</div>
+            <div className="country-meta">Priority {country.priority} · {country.income_tier} · {country.tech}</div>
+            <div className="mt-2">
+              <span className={`pill ${country.statusClass}`}>{country.status}</span>
+            </div>
+            <div className="hero-kpis">
+              <div className="hero-kpi">
+                <div className="hero-kpi-label">Schools Connected</div>
+                <div className="hero-kpi-value">{country.schools_connected.toLocaleString()}</div>
+                <div className="text-[10px] opacity-65">of {country.schools_target.toLocaleString()} ({pct}%)</div>
+              </div>
+              <div className="hero-kpi">
+                <div className="hero-kpi-label">Deployed</div>
+                <div className="hero-kpi-value">${country.deployed_m}M</div>
+                <div className="text-[10px] opacity-65">of ${country.drawdown_m}M ({dpct}%)</div>
+              </div>
+            </div>
+            <div className="mt-2.5">
+              <div className="text-[10px] opacity-65 mb-1">DEPLOYMENT PROGRESS</div>
+              <div className="prog-wrap">
+                <div className="prog-fill" style={{ width: `${pct}%`, background: '#80ADAD' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">🏦 Funding Sources</div>
+            {country.donors.map(d => (
+              <div key={d} className="text-[11px] py-1 border-b border-[#e5e7eb] last:border-b-0">{d}</div>
+            ))}
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">🚨 Issues & Flags</div>
+            {country.issues.map(issue => (
+              <div key={issue.title} className="issue-item">
+                <div className="issue-icon">{issue.icon}</div>
                 <div>
-                  <h2 className="font-semibold text-aris-graphite">{selected.name}</h2>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[selected.status]}`}>{selected.status}</span>
+                  <div className="issue-title">{issue.title}</div>
+                  <div className="issue-sub">{issue.sub}</div>
                 </div>
               </div>
-              <button onClick={() => onCountryDrill(selected)} className="text-xs bg-aris-teal text-white px-3 py-1.5 rounded-lg hover:bg-aris-cobalt transition-colors">Full Detail →</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="right-col">
+          <div className="panel">
+            <div className="panel-title">📈 Deployment Progress</div>
+            <div className="relative h-[180px]">
+              <Line data={lineData} options={lineOptions} />
             </div>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              {[['Drawdown',`$${selected.drawdown_m}M`],['Technology',selected.technology_mix],['CapEx/School',`$${selected.capex_per_school.toLocaleString()}`],['OpEx/School/yr',`$${selected.opex_per_school.toLocaleString()}`],['Currency',selected.currency],['Income Tier',selected.income_tier]].map(([k,v])=>(
-                <div key={k} className="bg-aris-white rounded-lg p-2">
-                  <span className="text-aris-nickel block">{k}</span>
-                  <span className="font-semibold text-aris-graphite">{v}</span>
+          </div>
+
+          <div className="panel overflow-x-auto">
+            <div className="panel-title">
+              🏗️ Active Projects{' '}
+              <span className="text-[10px] font-normal text-[#6b7280]">— click to view project detail</span>
+            </div>
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Tech</th>
+                  <th>Vendor</th>
+                  <th>Schools</th>
+                  <th>Budget</th>
+                  <th>Spent</th>
+                  <th>Timeline</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {country.projects.map((project, index) => (
+                  <tr
+                    key={project.name}
+                    className="clickable-row"
+                    onClick={() => onProjectDrill(country.id, index)}
+                  >
+                    <td className="font-semibold text-[11px]">{project.name}</td>
+                    <td><span className="pill pill-grey">{project.tech}</span></td>
+                    <td className="text-[10px] text-[#6b7280]">{project.vendor}</td>
+                    <td className="font-semibold">{project.schools.toLocaleString()}</td>
+                    <td>${project.budget_m}M</td>
+                    <td>${project.spent_m}M</td>
+                    <td className="text-[10px] text-[#6b7280]">{project.start} – {project.end}</td>
+                    <td><span className={`pill ${getProjectStatusClass(project.status)}`}>{project.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">📅 Programme Milestones</div>
+            <div className="timeline">
+              {country.milestones.map(milestone => (
+                <div key={`${milestone.date}-${milestone.label}`} className={`tl-item tl-${milestone.type}`}>
+                  <div className="tl-date">{milestone.date}</div>
+                  <div>
+                    <div className="tl-title">{milestone.label}</div>
+                    <div className="tl-sub">{milestone.sub}</div>
+                  </div>
                 </div>
               ))}
             </div>
-            <div>
-              <h3 className="text-xs font-semibold text-aris-nickel mb-2 uppercase tracking-wide">Key Risks</h3>
-              <div className="space-y-1.5">
-                {selected.risks.map((r,i)=>(
-                  <div key={i} className={`text-xs px-3 py-2 rounded-lg border ${RISK_COLORS[r.level]}`}>
-                    <span className="font-semibold capitalize">{r.level}: </span>{r.description}
-                  </div>
-                ))}
-              </div>
-            </div>
-            {selected.notes && <p className="text-xs text-aris-nickel bg-aris-white rounded-lg p-3">{selected.notes}</p>}
           </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-aris-aluminium p-8 flex flex-col items-center justify-center text-center h-64">
-            <span className="text-4xl mb-3">🗺️</span>
-            <p className="text-sm font-medium text-aris-graphite">Select a country</p>
-            <p className="text-xs text-aris-nickel mt-1">Click any card to see details and risks</p>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )
